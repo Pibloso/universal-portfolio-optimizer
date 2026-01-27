@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 
 from datetime import datetime
 
-tickers = ['VT', 'VFMO']
+tickers = ['VXC.TO', 'VMO.TO']
 borrow_rate = 0.092
-start_date = '2018-02-20'
+start_date = '2016-06-30'
 today = pd.Timestamp.today().normalize()
 last_business_day = pd.bdate_range(end=today, periods=1)[0]
 end_date = last_business_day.strftime('%Y-%m-%d')
