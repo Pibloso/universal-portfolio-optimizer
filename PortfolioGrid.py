@@ -1,37 +1,47 @@
 
-from DataImportYH import np
-from DataImportYH import plt
-from DataImportYH import returns
+from DataImportYH import np, pd
+from rich.progress import Progress
 
-step = 0.01
 weights = []
+margin_limit = 100//.3
 
-for w_vxc in np.arange(0, 1/0.3 + step, step):
-    for w_vmo in np.arange(0, 1/0.3 + step, step):
-        w_cash = 1 - w_vxc - w_vmo
-        if w_cash >1 or w_vxc + w_vmo > 1/0.3:
-            continue
-        weights.append((w_vxc, w_vmo, w_cash))
+for w_1 in np.arange(0, margin_limit):
+    for w_2 in np.arange(0, margin_limit - w_1):
+        for w_3 in np.arange(0, margin_limit - w_1 - w_2):
+            w_cash = 100 - w_1 - w_2 - w_3
+            if w_cash >=100 or w_1 + w_2 + w_3 > margin_limit:
+                continue
+            weights.append((w_1, w_2, w_3, w_cash))
+
+print(f"Grid complete: {len(weights)}")
 
 portfolio_log_returns = []
-for w_vxc, w_vmo, w_cash in weights:
-    port_log_return = (
-        w_vxc * returns['VXC.TO'] +
-        w_vmo * returns['VMO.TO']
-        )
-    if w_cash >=0:
-        port_log_return += w_cash * returns['CASH']
-    else: port_log_return -= w_cash * returns['BORROW']
-    cum_log_wealth = port_log_return.cumsum()
-    portfolio_log_returns.append(cum_log_wealth)
+returns = pd.read_pickle("YHData.pkl")
 
+with Progress() as progress:
+    bar1 = progress.add_task("Calculating Returns:", total=len(weights))
+
+    for w in weights:
+        port_log_return = (
+            w_1 * returns['VUN.TO'] +
+            w_2 * returns['VMO.TO'] +
+            w_3 * returns['VYMI']
+        )
+        if w_cash >=0:
+            port_log_return += w_cash * returns['CASH']
+        else: port_log_return -= w_cash * returns['BORROW']
+        del w
+        portfolio_log_returns.append(port_log_return.cumsum())
+        progress.update(bar1, advance=1)
+
+del returns
 print(len(portfolio_log_returns),len(weights))
 
 final_wealths = np.array([])
 for i, p in enumerate(portfolio_log_returns):
-    if weights[i][2]<0 and np.min(p) <= .3 - 1 / (-weights[i][2] + 1):
+    if weights[i][3]<0 and np.min(p) <= .3 - 1 / (-weights[i][3] + 1):
         final_wealths = np.append(final_wealths, 0)
     else: final_wealths = np.append(final_wealths, p.iloc[-1])
 wavg = final_wealths / np.sum(final_wealths)
 best_weights = np.average(weights, axis=0, weights=wavg)
-print(f"Best Allocation VXC:{best_weights[0]}, VMO: {best_weights[1]}, CASH: {best_weights[2]}")
+print(f"Best Allocation VUN:{best_weights[0]}, VMO: {best_weights[1]}, VYMI: {best_weights[2]}, CASH: {best_weights[3]}")
