@@ -1,47 +1,49 @@
 
-from DataImportYH import np, pd
+from DataImportYH import np, pd, tickers
 from rich.progress import Progress
 
-weights = []
-margin_limit = 100//.3
+margin_limit = int(100//.3)
+tickers.append('CASH')
+returns = pd.read_pickle('YHData.pkl')
+progress = Progress()
 
-for w_1 in np.arange(0, margin_limit):
-    for w_2 in np.arange(0, margin_limit - w_1):
-        for w_3 in np.arange(0, margin_limit - w_1 - w_2):
-            w_cash = 100 - w_1 - w_2 - w_3
-            if w_cash >=100 or w_1 + w_2 + w_3 > margin_limit:
-                continue
-            weights.append((w_1, w_2, w_3, w_cash))
+def cumulative_return(count):
+    if weights['CASH'].iloc[count] >= 0:
+        reference = 'CASH'
+    else: reference = 'BORROW'
+    returns['log_return'] = (
+        np.cumsum(weights['VUN.TO'].iloc[count] * returns['VUN.TO']) +
+        np.cumsum(weights['VMO.TO'].iloc[count] * returns['VMO.TO']) +
+        np.cumsum(weights['VYMI'].iloc[count] * returns['VYMI']) +
+        np.cumsum(weights['CASH'].iloc[count] * returns[reference])
+    )
+    progress.update(p_id, advance=1)
+    if np.min(returns['log_return']) > -1:
+        return np.max(returns['log_return'].iloc[-1], 0)
+    else: return 0
 
-print(f"Grid complete: {len(weights)}")
+def weight_matrix():
+    weight_list = []
+    for w_1 in range(margin_limit):
+        for w_2 in range(margin_limit - w_1):
+            for w_3 in range(margin_limit - w_1 - w_2):
+                w_cash = 100 - w_1 - w_2 - w_3
+                if w_cash >=100 or w_1 + w_2 + w_3 > margin_limit:
+                    continue
+                weight_list.append((w_1, w_2, w_3, w_cash))
+    df = pd.DataFrame(weight_list, columns = tickers)
+    return df, len(weight_list)
 
-portfolio_log_returns = []
-returns = pd.read_pickle("YHData.pkl")
 
-with Progress() as progress:
-    bar1 = progress.add_task("Calculating Returns:", total=len(weights))
+if __name__ == '__main__':
+    weights, run_time = weight_matrix()
+    print(weights)
+    progress.start()
+    p_id = progress.add_task("Calculating Returns:", total = run_time)
+    weights['wealth'] = list(map(cumulative_return, range(run_time)))
+    progress.stop()
+    del returns
 
-    for w in weights:
-        port_log_return = (
-            w_1 * returns['VUN.TO'] +
-            w_2 * returns['VMO.TO'] +
-            w_3 * returns['VYMI']
-        )
-        if w_cash >=0:
-            port_log_return += w_cash * returns['CASH']
-        else: port_log_return -= w_cash * returns['BORROW']
-        del w
-        portfolio_log_returns.append(port_log_return.cumsum())
-        progress.update(bar1, advance=1)
-
-del returns
-print(len(portfolio_log_returns),len(weights))
-
-final_wealths = np.array([])
-for i, p in enumerate(portfolio_log_returns):
-    if weights[i][3]<0 and np.min(p) <= .3 - 1 / (-weights[i][3] + 1):
-        final_wealths = np.append(final_wealths, 0)
-    else: final_wealths = np.append(final_wealths, p.iloc[-1])
-wavg = final_wealths / np.sum(final_wealths)
-best_weights = np.average(weights, axis=0, weights=wavg)
-print(f"Best Allocation VUN:{best_weights[0]}, VMO: {best_weights[1]}, VYMI: {best_weights[2]}, CASH: {best_weights[3]}")
+    weights['wavg'] = weights['wealth'] / np.sum(weights['wealth'])
+    best_weights = np.average(weights, axis=0, weights=weights['wavg'])
+    print(f"Best Allocation {tickers[0]}: {best_weights[0]}, {tickers[1]}: {best_weights[1]}, {tickers[2]}: {best_weights[2]}, CASH: {best_weights[3]}")

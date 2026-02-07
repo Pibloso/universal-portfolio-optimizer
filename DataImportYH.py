@@ -12,12 +12,12 @@ last_business_day = pd.bdate_range(end=today, periods=1)[0]
 end_date = last_business_day.strftime('%Y-%m-%d')
 
 cash_yield = yf.Ticker("PSA.TO").info.get("yield", None)
-data = yf.download(tickers, start=start_date, end=end_date, auto_adjust=True)['Close']
+returns = yf.download(tickers, start=start_date, end=end_date, auto_adjust=True)['Close']
 
-returns = data[tickers].pct_change().dropna()
-del data    
+returns = returns[tickers].pct_change().dropna()
 returns['CASH'] = (1 + cash_yield)**(1/252)-1
 returns['BORROW'] = (1 - borrow_rate)**(1/252)-1
 
 print(returns)
 returns.to_pickle("YHData.pkl")
+del returns
